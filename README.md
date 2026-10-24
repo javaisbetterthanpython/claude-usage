@@ -75,13 +75,13 @@ only in plain format, keeping JSON machine-readable and short output on one line
 <summary><b>📊 Example: <code>--all</code></b></summary>
 
 ```text
-5-hour: 23% used, resets 16:10 (in 1h39m)
-7-day:  59% used, resets Sun 03:00 (in 12h29m)
+5-hour: 30% used, resets 16:10 (in 1h21m)
+7-day:  60% used, resets Sun 03:00 (in 12h11m)
 kind             percent  severity   active  model        reset
 ------------------------------------------------------------------------------
-session              23%  normal                         resets 16:10 (in 1h39m)
-weekly_all           59%  normal     active               resets Sun 03:00 (in 12h29m)
-weekly_scoped         6%  normal             Fable        resets Sun 03:00 (in 12h29m)
+session              30%  normal                          resets 16:10 (in 1h21m)
+weekly_all           60%  normal     active               resets Sun 03:00 (in 12h11m)
+weekly_scoped         9%  normal             Fable        resets Sun 03:00 (in 12h11m)
 Claude Code 96%, Cowork 4%, Chats 0%, Other 0%
 ```
 
@@ -193,7 +193,7 @@ For the protocol and a recipe to rebuild the tool, see
 ## 🛠️ Install options
 
 ```bash
-pip install claude-limits       # from PyPI, once published
+pip install claude-limits       # from PyPI
 pipx install claude-limits      # isolated command installation
 pip install .                  # from a local clone
 ```

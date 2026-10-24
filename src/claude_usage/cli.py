@@ -38,9 +38,8 @@ def statusline():
         data = json.loads(sys.stdin.read())
         if not isinstance(data, dict):
             return 0
-        line = render_short(shape(data, 'status line, 0 min ago'))
         write_cache(config_dir() / 'last-statusline.json', data)
-        print(line)
+        print(render_short(shape(data, 'status line, 0 min ago')))
     except (OSError, ValueError, TypeError, AttributeError, OverflowError):
         pass
     return 0

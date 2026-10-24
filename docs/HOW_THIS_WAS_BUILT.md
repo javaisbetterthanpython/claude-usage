@@ -1,9 +1,9 @@
 # How this tool was built (a guide for the next LLM/engineer)
 
 This is a reproducible recipe for rebuilding `claude-usage`, following the
-structure of the sibling `cursor-usage` project. The starting point was the
-known-good, stdlib-only script in `agent-hq/server/bin/claude-usage` and its
-2026-10-24 handoff. The standalone project preserves its command, output,
+structure of the sibling `cursor-usage` project. The starting point was a
+known-good, stdlib-only single-file script written on 2026-10-24 and the
+handoff notes that came with it. The standalone project preserves its command, output,
 source order, cache names, raw JSON, and threshold behavior.
 
 > Scope/ethics: read **your own** local Claude Code login to query **your own**
@@ -264,4 +264,4 @@ python3.12 -m venv .venv
 - Limit error messages: https://code.claude.com/docs/en/errors.md
 - CLI reference (confirms there is no `claude usage` subcommand as of 2.1.198): https://code.claude.com/docs/en/cli-reference.md
 - Third-party report of persistent 429s from the endpoint (unverified): https://claudeissues.com/issue/31021-oauth-usage-api-api-oauth-usage-returns-persistent-429-rate-limit
-- Sibling tool in this repo, same install pattern: `server/bin/ask-model`, documented in `README.md` under "Other models from Claude".
+- Sibling project with the same layout and publishing flow: https://github.com/javaisbetterthanpython/cursor-usage
