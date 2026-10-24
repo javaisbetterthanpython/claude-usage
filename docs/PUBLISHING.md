@@ -1,7 +1,7 @@
 # Publishing
 
-Steps for the reviewer to turn this local project into a public repo and a
-`pip install`-able package. No CI is configured by default.
+Steps to turn this local project into a public repo and a `pip install`-able
+package. No CI is configured by default.
 
 ## 1. Check the names
 
@@ -37,8 +37,8 @@ Run from the project root when ready to publish:
 gh repo create javaisbetterthanpython/claude-usage --public --source=. --remote=origin --push
 ```
 
-Add `docs/demo.gif` when available; the README already references its eventual
-raw GitHub URL. This initial local project does not include the GIF.
+The README embeds `docs/demo.gif` by its raw GitHub URL, so it renders on PyPI
+too once the repo is public.
 
 ## 4. Publish to PyPI
 
