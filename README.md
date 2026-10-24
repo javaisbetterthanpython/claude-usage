@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/claude-limits/"><img alt="PyPI" src="https://img.shields.io/pypi/v/claude-limits?color=blue&label=PyPI"></a>
+  <a href="https://pypi.org/project/claude-usage-limits/"><img alt="PyPI" src="https://img.shields.io/pypi/v/claude-usage-limits?color=blue&label=PyPI"></a>
   <img alt="Python" src="https://img.shields.io/badge/python-3.9%2B-blue">
   <img alt="Platforms" src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey">
   <img alt="Dependencies" src="https://img.shields.io/badge/dependencies-zero-brightgreen">
@@ -23,7 +23,7 @@ screen. **`claude-usage` gives you the same two numbers from the shell** — for
 scripts, hooks, and AI agents deciding when to back off. It uses the Claude Code
 login already on your machine. No API key to manage, nothing to configure.
 
-**Install `claude-limits` from PyPI; the command is `claude-usage`.**
+**Install `claude-usage-limits` from PyPI; the command is `claude-usage`.**
 
 ```text
 $ claude-usage
@@ -45,7 +45,7 @@ $ claude-usage
 ## 🚀 Quickstart
 
 ```bash
-pip install claude-limits
+pip install claude-usage-limits
 claude-usage
 ```
 
@@ -193,12 +193,12 @@ For the protocol and a recipe to rebuild the tool, see
 ## 🛠️ Install options
 
 ```bash
-pip install claude-limits       # from PyPI
-pipx install claude-limits      # isolated command installation
+pip install claude-usage-limits       # from PyPI
+pipx install claude-usage-limits      # isolated command installation
 pip install .                  # from a local clone
 ```
 
-Requires Python 3.9+. **The PyPI distribution is `claude-limits`; the command and
+Requires Python 3.9+. **The PyPI distribution is `claude-usage-limits`; the command and
 GitHub repo are `claude-usage`, and the import package is `claude_usage`.**
 The PyPI names `claude-usage`, `claude-usage-cli`, and `claude-code-usage` belong to
 unrelated projects.

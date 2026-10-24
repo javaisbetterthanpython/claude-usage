@@ -5,14 +5,14 @@ package. No CI is configured by default.
 
 ## 1. Check the names
 
-- **PyPI distribution: `claude-limits`** — `pip install claude-limits`.
+- **PyPI distribution: `claude-usage-limits`** — `pip install claude-usage-limits`.
 - Import package: `claude_usage` under `src/`.
 - Console command: `claude-usage`.
 - GitHub repo: `javaisbetterthanpython/claude-usage`.
 
 The distribution name deliberately differs from the repo and command: the PyPI
 names `claude-usage`, `claude-usage-cli`, and `claude-code-usage` are already taken
-by unrelated projects. Keep the badge and install commands on `claude-limits`.
+by unrelated projects. Keep the badge and install commands on `claude-usage-limits`.
 The Homepage/Issues URLs and generic contributor author are already filled in.
 
 ## 2. Run the tests locally
@@ -61,7 +61,7 @@ the installed CLI still has no dependencies.
 Then anyone can:
 
 ```bash
-pip install claude-limits
+pip install claude-usage-limits
 claude-usage
 ```
 
@@ -100,7 +100,7 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
 ```
 
-Configure the matching Trusted Publisher on PyPI for project **claude-limits**,
+Configure the matching Trusted Publisher on PyPI for project **claude-usage-limits**,
 repository **javaisbetterthanpython/claude-usage**, and that workflow filename.
 No workflow is included in the initial project.
 </details>
