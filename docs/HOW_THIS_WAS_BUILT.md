@@ -218,7 +218,7 @@ and badge row, and MIT contributor licensing.
 zero for thresholds. Exit codes remain 0 for success, 1 for either threshold
 or unavailable data, 2 for argparse errors.
 
-The PyPI distribution is **`claude-limits`**, because `claude-usage`,
+The PyPI distribution is **`claude-usage-limits`**, because `claude-usage`,
 `claude-usage-cli`, and `claude-code-usage` were already taken. The repo and
 console command remain `claude-usage`; the import is `claude_usage`.
 

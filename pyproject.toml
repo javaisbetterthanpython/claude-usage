@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "claude-limits"
+name = "claude-usage-limits"
 version = "0.1.0"
 description = "CLI for your Claude subscription rate limits: the 5-hour and 7-day usage windows Claude Code shows in /usage, from your terminal."
 readme = "README.md"
