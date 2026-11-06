@@ -3,18 +3,19 @@
 This is a reproducible recipe for rebuilding `claude-usage`, following the
 structure of the sibling `cursor-usage` project. The starting point was a
 known-good, stdlib-only single-file script written on 2026-10-24 and the
-handoff notes that came with it. The standalone project preserves its command, output,
-source order, cache names, raw JSON, and threshold behavior.
+handoff notes that came with it. The standalone project preserves its command,
+source order and cache names. Version 0.2.0 reports weekly limits and filters
+retired session data from JSON output.
 
 > Scope/ethics: read **your own** local Claude Code login to query **your own**
 > subscription usage from Anthropic's servers. Don't use accounts you don't control.
 
 ## 1. The goal and the missing command
 
-Goal: show the 5-hour and 7-day subscription windows from a shell, so scripts,
+Goal: show weekly subscription usage and model limits from a shell, so scripts,
 hooks, and agents can decide when to back off. `claude --help` and the CLI
 reference have no `claude usage` subcommand as of Claude Code 2.1.198. `/usage`
-exists inside the interactive session, but cannot supply these two numbers to
+exists inside the interactive session, but cannot supply this usage to
 a shell script. The official place to request a CLI equivalent is `/feedback`
 in Claude Code.
 
@@ -77,64 +78,45 @@ nor verbose logs may contain any part of the JSON, token, or request headers.
 
 ## 4. The observed response and fields that matter
 
-The observation on 2026-10-24 was a Max subscription with no extra usage credits.
-Field presence on Pro, Team, and API-key accounts was not established.
+The live endpoint was rechecked on 2026-11-06 using the same token resolver,
+beta header, HTTP implementation, and timeout as the CLI. It returned a populated
+`seven_day` object and a null retired session field. There was no session entry
+in `limits`. No replacement short-duration window was observed.
 
-Below is the entire response example supplied in the handoff, preserved as
-recorded. It is an **abridged observation, not parseable JSON**: the original
-uses `...same keys...`, omitted feature-flag fields, and redacted timestamps.
-The tests expand the explicitly listed repeated keys, retain every explicitly
-shown field, and omit unknown fields rather than inventing them.
+**Used for the default report:** `seven_day.utilization`, `seven_day.resets_at`,
+and any populated `seven_day_*` objects containing usage percentages. Nullable
+weekly variants observed were `seven_day_oauth_apps`, `seven_day_opus`,
+`seven_day_sonnet`, `seven_day_cowork`, and `seven_day_omelette`. Do not interpret
+`seven_day_breakdown` as a usage window.
 
-**Used for the default report:** `five_hour.utilization`, `five_hour.resets_at`,
-`seven_day.utilization`, `seven_day.resets_at`. **Used for `--all`:** `limits[]`
-and `seven_day_breakdown.rows[]`. Raw JSON output preserves everything received.
-
-```json
-{
-  "five_hour": {"utilization": 23.0, "resets_at": "2026-10-24T20:10:00.886739+00:00",
-                "limit_dollars": null, "used_dollars": null, "remaining_dollars": null, "locked_reason": null},
-  "seven_day": {"utilization": 59.0, "resets_at": "2026-10-25T07:00:00.886762+00:00", ...same keys...},
-  "seven_day_oauth_apps": null, "seven_day_opus": null, "seven_day_sonnet": null,
-  "seven_day_cowork": null, ...many null feature-flag-looking keys (tangelo, iguana_necktie, ...)...,
-  "pace": null,
-  "extra_usage": {"is_enabled": false, "monthly_limit": null, "used_credits": null, "utilization": null,
-                  "currency": null, "decimal_places": null, "disabled_reason": null, "user_disabled": true,
-                  "spend_limit_reached": false, "credits_ever_enabled": true, "daily": null, "weekly": null},
-  "limits": [
-    {"kind": "session",       "group": "session", "percent": 23, "severity": "normal",
-     "resets_at": "2026-10-24T20:10:00.886739+00:00", "scope": null, "is_active": false},
-    {"kind": "weekly_all",    "group": "weekly",  "percent": 59, "severity": "normal",
-     "resets_at": "2026-10-25T07:00:00.886762+00:00", "scope": null, "is_active": true},
-    {"kind": "weekly_scoped", "group": "weekly",  "percent": 6,  "severity": "normal",
-     "resets_at": "2026-10-25T07:00:00.886962+00:00",
-     "scope": {"model": {"id": null, "display_name": "Fable"}, "surface": null}, "is_active": false}
-  ],
-  "spend": {"used": {"amount_minor": 0, "currency": "USD", "exponent": 2}, "limit": null, "percent": 0,
-            "severity": "normal", "enabled": false, ...},
-  "member_dashboard_available": false,
-  "seven_day_breakdown": {"as_of": "...", "window_started_at": "...",
-                          "rows": [{"key": "claude_code", "display_name": "Claude Code", "percent": 96},
-                                   {"key": "chat", "display_name": "Chats", "percent": 0},
-                                   {"key": "cowork", "display_name": "Cowork", "percent": 4},
-                                   {"key": "other", "display_name": "Other", "percent": 0}]},
-  "weekly_scoped_shares": [{"limit_index": 2, "used_percent_of_weekly": 3, "allowance_percent_of_weekly": 50}]
-}
-```
+**Used for `--all`:** `limits[]` and `seven_day_breakdown.rows[]`. The live
+`limits` entries contained `kind`, `group`, `percent`, `severity`, `resets_at`,
+`scope`, and `is_active`. The scoped entry included `scope.model.id`,
+`scope.model.display_name`, and `scope.surface`.
 
 - `utilization` is a float percentage; `resets_at` is ISO 8601 with an offset.
   Convert resets to local time and clamp elapsed countdowns to zero minutes.
-- `limits[]` is the richer per-limit view: `kind`, `percent`, `severity`, reset,
-  and `is_active`, the currently binding window. `weekly_scoped` adds a model
-  cap through `scope.model.display_name`. Here Fable's cap is 50% of the weekly
-  allowance, and its own utilization is 6%; `weekly_scoped_shares` relates that
-  cap to overall weekly consumption.
-- `seven_day_breakdown.rows` splits weekly use by surface. Sort descending by
-  percent, retaining input order for ties: Claude Code 96%, Cowork 4%, Chats 0%,
-  Other 0% in this observation.
-- `extra_usage` describes optional extra usage credits, disabled here. Preserve
-  it in raw JSON; do not interpret credits or spend as the two subscription windows.
-  `spend` and nullable feature flags are also retained without interpretation.
+- `limits[]` contains overall and scoped weekly limits. `weekly_scoped` adds a
+  model cap through `scope.model.display_name`. `--warn` checks all normalized
+  weekly windows and weekly entries in `limits`; `--warn-7d` checks only the
+  overall `seven_day` window. Both default to an inclusive 70% threshold.
+- `seven_day_breakdown` contains `as_of`, `window_started_at`, and `rows` with
+  `key`, `display_name`, and `percent`. Sort rows by descending percentage,
+  retaining input order for ties.
+- `weekly_scoped_shares` contains `limit_index`, `used_percent_of_weekly`, and
+  `allowance_percent_of_weekly`. Indices refer to positions in `limits`.
+- `extra_usage` describes optional credits, while `spend` describes spending.
+  These and `member_dashboard_available`, `pace`, and nullable feature flags
+  are retained in JSON without treating them as subscription windows. The live
+  `spend` object also included `disabled_reason`, `cap`, `balance`, `auto_reload`,
+  `disclaimer`, `can_purchase_credits`, and `can_toggle`.
+
+JSON output preserves other received fields, but removes retired session fields
+from endpoint and status-line payloads and session entries from `limits`.
+`weekly_scoped_shares.limit_index` is remapped when entries are removed. This
+also applies to old cached answers, without mutating their original payload.
+An absent or null weekly window renders as unknown in plain output, is omitted
+in short output, and never triggers a threshold warning.
 
 ## 5. The measured 429 behavior drives the cache design
 
@@ -167,7 +149,6 @@ subscription fields documented at the status-line reference are:
 {
   "model": {"display_name": "Fable 5.1"},
   "rate_limits": {
-    "five_hour": {"used_percentage": 25, "resets_at": 1792000000},
     "seven_day": {"used_percentage": 59, "resets_at": 1792100000}
   }
 }
@@ -176,7 +157,7 @@ subscription fields documented at the status-line reference are:
 `used_percentage` is percent used. **`resets_at` is Unix epoch seconds**, unlike
 credential expiry in milliseconds. Map it to an ISO 8601 UTC timestamp for the
 shared report shape. `rate_limits.spend_limit` is for gateway deployments, not
-one of these subscription windows.
+a weekly subscription window.
 
 The documented subscription `rate_limits` fields are **Pro/Max only**, available
 only after the session's first API response. Each window may be absent
@@ -184,7 +165,7 @@ independently and is dropped after its reset time passes. The fallback can lag:
 it updates only while an active session repaints.
 
 That is why `--statusline` exists: it captures the documented feed into
-`last-statusline.json`, while printing `Model · 5h N% · 7d N%` with missing parts
+`last-statusline.json`, while printing `Model · 7d N%` with missing parts
 omitted. Configure it by merging this into Claude Code's settings:
 
 ```json
@@ -205,17 +186,17 @@ and badge row, and MIT contributor licensing.
 - `auth.py`: environment → macOS Keychain → file, expiry check, safe source-only logs.
 - `api.py`: injectable config directory, one `_get_json` HTTP seam, atomic caches,
   source order, distinct failures. Tests mock the seam and use `os.utime` for ages.
-- `report.py`: normalize to two `{utilization, resets_at}` windows plus `source`
-  and untouched `raw`; local reset times, percentages, plain/short/detail renderers.
+- `report.py`: normalize weekly `{utilization, resets_at}` windows plus `source`
+  and filtered `raw`; local reset times, percentages, plain/short/detail renderers.
 - `cli.py`: argparse, `main(argv=None)` returning an int, hidden status-line mode.
   `__main__.py` uses `sys.exit(main())`.
 - New flags: `--warn-7d [N]`, `--all`, `--format {plain,json,short}`, safe `-v`, `-V`.
-  Preserve `--warn [N]` (default 70, inclusive), raw `--json` with `indent=1`, the
-  exact aligned two-line plain output, and the `claude-usage` command name.
+  Keep `--warn [N]` (default 70, inclusive), `--json` with `indent=1`, weekly
+  plain output, and the `claude-usage` command name.
 
 `--json` and `--format` set the same argparse destination; the last wins.
-`--all` adds detail only to plain output. Missing window utilization counts as
-zero for thresholds. Exit codes remain 0 for success, 1 for either threshold
+`--all` adds detail only to plain output. Missing window utilization never
+triggers a threshold warning. Exit codes remain 0 for success, 1 for either threshold
 or unavailable data, 2 for argparse errors.
 
 The PyPI distribution is **`claude-usage-limits`**, because `claude-usage`,
@@ -245,7 +226,7 @@ shell variable and is never echoed. This bypasses the tool's cache deliberately:
 CLAUDE_USAGE_TOKEN=$(security find-generic-password -s "Claude Code-credentials" -w | python3 -c 'import json,sys; print(json.load(sys.stdin)["claudeAiOauth"]["accessToken"])'); curl -sS -H "Authorization: Bearer $CLAUDE_USAGE_TOKEN" -H "anthropic-beta: oauth-2025-04-20" -H "Accept: application/json" https://api.anthropic.com/api/oauth/usage; unset CLAUDE_USAGE_TOKEN
 ```
 
-If that returns the two window objects, the protocol still works. For ordinary
+If that returns a `seven_day` usage object, the protocol still works. For ordinary
 verification use the mocked test suite instead:
 
 ```bash

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "claude-usage-limits"
-version = "0.1.0"
-description = "CLI for your Claude subscription rate limits: the 5-hour and 7-day usage windows Claude Code shows in /usage, from your terminal."
+version = "0.2.0"
+description = "CLI for your Claude subscription rate limits: weekly usage and model limits Claude Code shows in /usage, from your terminal."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

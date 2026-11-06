@@ -71,9 +71,9 @@ Bump `version` in both `pyproject.toml` and `src/claude_usage/__init__.py`, comm
 tag `vX.Y.Z`, and push the commit and tag:
 
 ```bash
-git tag v0.1.0
+git tag v0.2.0
 git push origin main
-git push origin v0.1.0
+git push origin v0.2.0
 ```
 
 <details>
