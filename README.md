@@ -216,6 +216,11 @@ pip install pytest && pytest -q
 Tests use temporary config directories and mocked HTTP; they never contact the
 endpoint or read your real credentials.
 
+Regenerate the demo with `python3 docs/record_demo.py` after installing
+[agg](https://github.com/asciinema/agg/releases). The recorder runs the CLI against
+illustrative local caches and supplies status-line JSON on stdin; it needs no
+credentials or network access. The README embeds the resulting `docs/demo.gif`.
+
 ## 📄 License
 
 [MIT](LICENSE) — do whatever you like.

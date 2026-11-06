@@ -5,13 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "claude-usage-limits"
 version = "0.2.0"
-description = "CLI for your Claude subscription rate limits: weekly usage and model limits Claude Code shows in /usage, from your terminal."
+description = "CLI for Claude subscription weekly usage and model limits, with status-line output and warning thresholds."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.9"
 authors = [{ name = "claude-usage contributors" }]
-keywords = ["claude", "claude-code", "anthropic", "usage", "rate-limit", "cli"]
+keywords = ["claude", "claude-code", "anthropic", "usage", "rate-limit", "weekly-usage", "subscription", "statusline", "cli"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
