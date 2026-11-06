@@ -19,7 +19,7 @@
 ---
 
 Claude Code shows your subscription limits only in the interactive `/usage`
-screen. **`claude-usage` gives you the same two numbers from the shell** — for
+screen. **`claude-usage` gives you the weekly usage and model limits from the shell** — for
 scripts, hooks, and AI agents deciding when to back off. It uses the Claude Code
 login already on your machine. No API key to manage, nothing to configure.
 
@@ -27,14 +27,13 @@ login already on your machine. No API key to manage, nothing to configure.
 
 ```text
 $ claude-usage
-5-hour: 25% used, resets 16:10 (in 1h39m)
-7-day:  59% used, resets Sun 03:00 (in 12h29m)
+7-day: 59% used, resets Sun 03:00 (in 12h29m)
 ```
 
 ## ✨ Features
 
-- **Two windows, one command** — 5-hour and 7-day percent used and local reset times.
-- **🚦 Thresholds for scripts** — `--warn [N]` and `--warn-7d [N]` exit 1 at or above N%.
+- **Weekly limits, one command** — 7-day usage, populated weekly variants, and local reset times.
+- **🚦 Thresholds for scripts** — `--warn [N]` checks all weekly limits; `--warn-7d [N]` checks overall weekly usage. Both exit 1 at or above N%.
 - **📊 Extra detail** — `--all` shows per-model limits, the active window, and the weekly surface split.
 - **📟 Status line** — a compact model and usage line that also feeds the documented fallback source.
 - **🧾 Plain, JSON, or short** — readable in a terminal and easy to use from scripts.
@@ -56,9 +55,9 @@ its access token fresh.
 
 | Command | What it does |
 |---|---|
-| `claude-usage` | Two usage windows and their reset times |
-| `claude-usage --json` | Raw JSON of whichever source answered; alias for `--format json` |
-| `claude-usage --warn [N]` | Exit 1 at or above N% of the 5-hour window (default 70) |
+| `claude-usage` | Weekly usage windows and their reset times |
+| `claude-usage --json` | Usage JSON from whichever source answered, with retired session limits removed; alias for `--format json` |
+| `claude-usage --warn [N]` | Exit 1 when any weekly window or weekly model limit reaches N% (default 70) |
 | `claude-usage --warn-7d [N]` | Exit 1 at or above N% of the 7-day window (default 70) |
 | `claude-usage --all` | Add per-limit details and weekly surface breakdown in plain format |
 | `claude-usage --format {plain,json,short}` | Choose output format (default plain) |
@@ -75,11 +74,9 @@ only in plain format, keeping JSON machine-readable and short output on one line
 <summary><b>📊 Example: <code>--all</code></b></summary>
 
 ```text
-5-hour: 30% used, resets 16:10 (in 1h21m)
-7-day:  60% used, resets Sun 03:00 (in 12h11m)
+7-day: 60% used, resets Sun 03:00 (in 12h11m)
 kind             percent  severity   active  model        reset
 ------------------------------------------------------------------------------
-session              30%  normal                          resets 16:10 (in 1h21m)
 weekly_all           60%  normal     active               resets Sun 03:00 (in 12h11m)
 weekly_scoped         9%  normal             Fable        resets Sun 03:00 (in 12h11m)
 Claude Code 96%, Cowork 4%, Chats 0%, Other 0%
@@ -100,8 +97,12 @@ claude-usage --json
 The usual output is always printed. Exit codes: **0** for success, **1** when
 either threshold trips or no source answers, **2** for an argument error.
 The threshold is inclusive: `--warn` exits 1 at 70%, including exactly 70%.
-A missing window counts as zero for threshold checks. JSON is the raw payload,
-so its shape depends on the source; plain and short output normalize both.
+Missing or null windows do not trigger warnings. `--warn` includes weekly model
+caps in `limits[]`; `--warn-7d` checks only `seven_day`. Populated `seven_day_*`
+usage windows appear in plain and short output and are checked by `--warn`.
+JSON retains other fields from the source, but removes retired session limits
+from both endpoint and status-line payloads, including older cached answers.
+Weekly share indices are adjusted when obsolete detail entries are removed.
 
 ## 📟 Claude Code status line
 
@@ -117,14 +118,14 @@ settings):
 Claude Code pipes its documented status JSON to the command on each repaint:
 
 ```text
-Fable 5.1 · 5h 25% · 7d 59%
+Fable 5.1 · 7d 59%
 ```
 
 Missing parts are omitted. This mode never looks up credentials or makes a network
 call. It also writes `last-statusline.json`, feeding the documented fallback when
 the endpoint is unavailable. Invalid input produces no output and exits 0.
 `claude-usage --format short` gives the same compact format from the normal source
-order; endpoint answers usually have no model, so show `5h 23% · 7d 59%`.
+order; endpoint answers usually have no model, so show `7d 59%`.
 
 ## 🤔 How it works
 

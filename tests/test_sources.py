@@ -7,10 +7,8 @@ import pytest
 
 from claude_usage import api, cli
 
-ENDPOINT = {"five_hour": {"utilization": 23.0, "resets_at": "2026-10-24T20:10:00.886739+00:00"},
-            "seven_day": {"utilization": 59.0, "resets_at": "2026-10-25T07:00:00.886762+00:00"}}
+ENDPOINT = {"seven_day": {"utilization": 59.0, "resets_at": "2026-10-25T07:00:00.886762+00:00"}}
 STATUS = {"model": {"display_name": "Fable 5.1"}, "rate_limits": {
-    "five_hour": {"used_percentage": 25, "resets_at": 1792000000},
     "seven_day": {"used_percentage": 59, "resets_at": 1792100000}}}
 
 
@@ -76,7 +74,7 @@ def test_429_uses_statusline(monkeypatch, tmp_path):
     monkeypatch.setattr(api, '_get_json', rate_limited)
     out = api.usage()
     assert out['source'] == 'status line, 12 min ago'
-    assert out['five_hour']['utilization'] == 25
+    assert out['seven_day']['utilization'] == 59
     assert out['raw'] == STATUS
 
 

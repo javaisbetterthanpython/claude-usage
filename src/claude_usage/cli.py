@@ -7,18 +7,18 @@ import sys
 from . import __version__
 from .api import usage, write_cache
 from .auth import config_dir
-from .report import render_limits, render_plain, render_short, shape
+from .report import render_limits, render_plain, render_short, shape, warning_reached
 
 
 def build_parser():
     p = argparse.ArgumentParser(
         prog='claude-usage',
-        description="Show Claude subscription rate limits: the 5-hour and 7-day usage windows.",
+        description="Show Claude subscription rate limits: weekly usage and model limits.",
     )
     p.add_argument('--json', action='store_const', dest='format', const='json',
-                   help='print the raw JSON that was used (alias for --format json)')
+                   help='print usage JSON without retired session limits (alias for --format json)')
     p.add_argument('--warn', type=int, nargs='?', const=70, metavar='N',
-                   help='exit 1 when the 5-hour window is at or above N%% (default 70)')
+                   help='exit 1 when any weekly limit is at or above N%% (default 70)')
     p.add_argument('--warn-7d', type=int, nargs='?', const=70, metavar='N',
                    help='exit 1 when the 7-day window is at or above N%% (default 70)')
     p.add_argument('--all', action='store_true',
@@ -65,8 +65,10 @@ def main(argv=None):
     except (RuntimeError, OSError, ValueError, TypeError, AttributeError, OverflowError) as exc:
         print('claude-usage: ' + str(exc), file=sys.stderr)
         return 1
-    for threshold, key in ((args.warn, 'five_hour'), (args.warn_7d, 'seven_day')):
-        if threshold is not None and (out[key]['utilization'] or 0) >= threshold:
+    if args.warn is not None and warning_reached(out, args.warn):
+        return 1
+    if args.warn_7d is not None and out['seven_day']['utilization'] is not None:
+        if out['seven_day']['utilization'] >= args.warn_7d:
             return 1
     return 0
 
