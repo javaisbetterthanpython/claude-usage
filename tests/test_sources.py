@@ -2,13 +2,16 @@ import json
 import os
 import time
 import urllib.error
+from types import SimpleNamespace
 
 import pytest
 
-from claude_usage import api, cli
+from claude_usage import api, auth, cli
 
-ENDPOINT = {"seven_day": {"utilization": 59.0, "resets_at": "2026-10-25T07:00:00.886762+00:00"}}
+ENDPOINT = {"five_hour": None,
+            "seven_day": {"utilization": 59.0, "resets_at": "2026-10-25T07:00:00.886762+00:00"}}
 STATUS = {"model": {"display_name": "Fable 5.1"}, "rate_limits": {
+    "five_hour": {"used_percentage": 25, "resets_at": 1792000000},
     "seven_day": {"used_percentage": 59, "resets_at": 1792100000}}}
 
 
@@ -74,6 +77,7 @@ def test_429_uses_statusline(monkeypatch, tmp_path):
     monkeypatch.setattr(api, '_get_json', rate_limited)
     out = api.usage()
     assert out['source'] == 'status line, 12 min ago'
+    assert out['five_hour']['utilization'] == 25
     assert out['seven_day']['utilization'] == 59
     assert out['raw'] == STATUS
 
@@ -126,6 +130,7 @@ def test_cli_status_source_details_and_raw(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(api, '_get_json', rate_limited)
     assert cli.main(['--all']) == 0
     out = capsys.readouterr().out
+    assert out.startswith('5-hour: 25% used,')
     assert '(from the status line, 0 min ago)' in out
     assert '(details not available from the status-line source)' in out
     assert cli.main(['--json']) == 0
@@ -154,3 +159,58 @@ def test_request_errors_never_print_credentials(monkeypatch, capsys):
     assert 'PRIVATE-TOKEN' not in captured.out + captured.err
     assert 'Bearer' not in captured.err
     assert 'invalid request or JSON response' in captured.err
+
+
+@pytest.mark.parametrize('subscription,tier,expected', [
+    ('max', 'default_claude_max_20x', 'Ultra (default_claude_max_20x)'),
+    ('max', 'default_claude_max_5x', 'Max (default_claude_max_5x)'),
+    ('pro', 'default_claude_pro', 'Pro (default_claude_pro)'),
+    ('team', None, 'Team'),
+    (None, None, 'unknown'),
+])
+def test_resolve_plan_from_file(monkeypatch, tmp_path, subscription, tier, expected):
+    monkeypatch.delenv('CLAUDE_CODE_OAUTH_TOKEN')
+    monkeypatch.setattr(auth.sys, 'platform', 'linux')
+    save(tmp_path, '.credentials.json', {'claudeAiOauth': {
+        'accessToken': 'FILE-TOKEN', 'subscriptionType': subscription, 'rateLimitTier': tier,
+    }})
+    assert auth.resolve_plan() == expected
+
+
+def test_verbose_plan_from_keychain(monkeypatch, tmp_path, capsys):
+    monkeypatch.delenv('CLAUDE_CODE_OAUTH_TOKEN')
+    monkeypatch.setattr(auth.sys, 'platform', 'darwin')
+    save(tmp_path, '.credentials.json', {'claudeAiOauth': {
+        'accessToken': 'FILE-TOKEN', 'subscriptionType': 'pro',
+    }})
+    oauth = {'accessToken': 'KEYCHAIN-TOKEN', 'refreshToken': 'KEYCHAIN-REFRESH',
+             'subscriptionType': 'max', 'rateLimitTier': 'default_claude_max_20x'}
+    monkeypatch.setattr(auth.subprocess, 'run', lambda *args, **kwargs: SimpleNamespace(
+        returncode=0, stdout=json.dumps({'claudeAiOauth': oauth}),
+    ))
+    # An Ultra account can still receive a 5-hour window.
+    raw = dict(ENDPOINT, five_hour={'utilization': 25})
+    monkeypatch.setattr(api, '_get_json', lambda *args: raw)
+    assert cli.main(['-v']) == 0
+    out, err = capsys.readouterr()
+    assert out.startswith('5-hour: 25% used,')
+    assert err == ('credentials: macOS keychain\nusage: endpoint\n'
+                   'plan: Ultra (default_claude_max_20x)\n')
+    for secret in ('FILE-TOKEN', 'KEYCHAIN-TOKEN', 'KEYCHAIN-REFRESH'):
+        assert secret not in out + err
+
+
+def test_plan_skips_credentials_for_override(monkeypatch):
+    monkeypatch.setattr(auth.sys, 'platform', 'darwin')
+    monkeypatch.setattr(auth.subprocess, 'run', lambda *args, **kwargs: pytest.fail('keychain called'))
+    assert auth.resolve_plan() is None
+
+
+def test_unreadable_plan_is_ignored(monkeypatch, tmp_path, capsys):
+    monkeypatch.delenv('CLAUDE_CODE_OAUTH_TOKEN')
+    monkeypatch.setattr(auth.sys, 'platform', 'linux')
+    (tmp_path / '.credentials.json').write_text('malformed PRIVATE-TOKEN')
+    save(tmp_path, 'last-usage.json', ENDPOINT)
+    assert auth.resolve_plan() is None
+    assert cli.main(['-v']) == 0
+    assert capsys.readouterr().err == 'usage: endpoint\n'

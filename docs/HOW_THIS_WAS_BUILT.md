@@ -4,15 +4,15 @@ This is a reproducible recipe for rebuilding `claude-usage`, following the
 structure of the sibling `cursor-usage` project. The starting point was a
 known-good, stdlib-only single-file script written on 2026-10-24 and the
 handoff notes that came with it. The standalone project preserves its command,
-source order and cache names. Version 0.2.0 reports weekly limits and filters
-retired session data from JSON output.
+source order and cache names. Version 0.2.1 shows the 5-hour window when the
+source reports it and preserves raw JSON.
 
 > Scope/ethics: read **your own** local Claude Code login to query **your own**
 > subscription usage from Anthropic's servers. Don't use accounts you don't control.
 
 ## 1. The goal and the missing command
 
-Goal: show weekly subscription usage and model limits from a shell, so scripts,
+Goal: show subscription usage and model limits from a shell, so scripts,
 hooks, and agents can decide when to back off. `claude --help` and the CLI
 reference have no `claude usage` subcommand as of Claude Code 2.1.198. `/usage`
 exists inside the interactive session, but cannot supply this usage to
@@ -73,18 +73,20 @@ Credential shape (all values redacted; the numeric example illustrates units):
 `expiresAt / 1000 < time.time()`. Tell the user to open `claude` so it refreshes.
 Access tokens lasted roughly a day in observation; any running Claude Code
 session keeps them fresh. Do **not** implement refresh: that flow is
-undocumented, and writing credentials introduces needless risk. Neither errors
-nor verbose logs may contain any part of the JSON, token, or request headers.
+undocumented, and writing credentials introduces needless risk. Verbose output
+can show the plan and rate-limit tier from the selected credential source.
+Keep tokens and request headers out of errors and verbose logs.
 
 ## 4. The observed response and fields that matter
 
 The live endpoint was rechecked on 2026-11-06 using the same token resolver,
 beta header, HTTP implementation, and timeout as the CLI. It returned a populated
-`seven_day` object and a null retired session field. There was no session entry
-in `limits`. No replacement short-duration window was observed.
+`seven_day` object, `"five_hour": null`, and no session entry in `limits`.
+Verified Ultra (formerly Max 20x) accounts have no 5-hour window. Show the
+window whenever the source supplies it, including for unverified Ultra accounts.
 
-**Used for the default report:** `seven_day.utilization`, `seven_day.resets_at`,
-and any populated `seven_day_*` objects containing usage percentages. Nullable
+The default report reads `utilization` and `resets_at` from `five_hour` when it
+is an object, from `seven_day`, and from populated `seven_day_*` usage objects. Nullable
 weekly variants observed were `seven_day_oauth_apps`, `seven_day_opus`,
 `seven_day_sonnet`, `seven_day_cowork`, and `seven_day_omelette`. Do not interpret
 `seven_day_breakdown` as a usage window.
@@ -96,9 +98,10 @@ weekly variants observed were `seven_day_oauth_apps`, `seven_day_opus`,
 
 - `utilization` is a float percentage; `resets_at` is ISO 8601 with an offset.
   Convert resets to local time and clamp elapsed countdowns to zero minutes.
-- `limits[]` contains overall and scoped weekly limits. `weekly_scoped` adds a
+- `limits[]` contains the session limit when available, along with overall and
+  scoped weekly limits. `weekly_scoped` adds a
   model cap through `scope.model.display_name`. `--warn` checks all normalized
-  weekly windows and weekly entries in `limits`; `--warn-7d` checks only the
+  usage windows and session and weekly entries in `limits`. `--warn-7d` checks only the
   overall `seven_day` window. Both default to an inclusive 70% threshold.
 - `seven_day_breakdown` contains `as_of`, `window_started_at`, and `rows` with
   `key`, `display_name`, and `percent`. Sort rows by descending percentage,
@@ -111,10 +114,8 @@ weekly variants observed were `seven_day_oauth_apps`, `seven_day_opus`,
   `spend` object also included `disabled_reason`, `cap`, `balance`, `auto_reload`,
   `disclaimer`, `can_purchase_credits`, and `can_toggle`.
 
-JSON output preserves other received fields, but removes retired session fields
-from endpoint and status-line payloads and session entries from `limits`.
-`weekly_scoped_shares.limit_index` is remapped when entries are removed. This
-also applies to old cached answers, without mutating their original payload.
+JSON output preserves the entire payload, including session fields and
+`weekly_scoped_shares.limit_index`, for live and cached answers.
 An absent or null weekly window renders as unknown in plain output, is omitted
 in short output, and never triggers a threshold warning.
 
@@ -149,6 +150,7 @@ subscription fields documented at the status-line reference are:
 {
   "model": {"display_name": "Fable 5.1"},
   "rate_limits": {
+    "five_hour": {"used_percentage": 25, "resets_at": 1792000000},
     "seven_day": {"used_percentage": 59, "resets_at": 1792100000}
   }
 }
@@ -157,15 +159,15 @@ subscription fields documented at the status-line reference are:
 `used_percentage` is percent used. **`resets_at` is Unix epoch seconds**, unlike
 credential expiry in milliseconds. Map it to an ISO 8601 UTC timestamp for the
 shared report shape. `rate_limits.spend_limit` is for gateway deployments, not
-a weekly subscription window.
+a subscription window.
 
-The documented subscription `rate_limits` fields are **Pro/Max only**, available
-only after the session's first API response. Each window may be absent
+The subscription `rate_limits` fields become available after the session's
+first API response. Each window may be absent
 independently and is dropped after its reset time passes. The fallback can lag:
 it updates only while an active session repaints.
 
 That is why `--statusline` exists: it captures the documented feed into
-`last-statusline.json`, while printing `Model · 7d N%` with missing parts
+`last-statusline.json`, while printing `Model · 5h N% · 7d N%` with missing parts
 omitted. Configure it by merging this into Claude Code's settings:
 
 ```json
@@ -183,15 +185,16 @@ Use the sibling `cursor-usage-cli` conventions: setuptools, a `src/` layout,
 module docstrings, small functions, pytest assertions, a centered README title
 and badge row, and MIT contributor licensing.
 
-- `auth.py`: environment → macOS Keychain → file, expiry check, safe source-only logs.
+- `auth.py` resolves credentials from the environment, macOS Keychain, or a
+  file, in that order. It checks expiry and provides source and plan diagnostics.
 - `api.py`: injectable config directory, one `_get_json` HTTP seam, atomic caches,
   source order, distinct failures. Tests mock the seam and use `os.utime` for ages.
-- `report.py`: normalize weekly `{utilization, resets_at}` windows plus `source`
-  and filtered `raw`; local reset times, percentages, plain/short/detail renderers.
+- `report.py` normalizes available `{utilization, resets_at}` windows, preserves
+  the source and raw payload, and renders local reset times and percentages.
 - `cli.py`: argparse, `main(argv=None)` returning an int, hidden status-line mode.
   `__main__.py` uses `sys.exit(main())`.
 - New flags: `--warn-7d [N]`, `--all`, `--format {plain,json,short}`, safe `-v`, `-V`.
-  Keep `--warn [N]` (default 70, inclusive), `--json` with `indent=1`, weekly
+  Keep `--warn [N]` (default 70, inclusive), `--json` with `indent=1`,
   plain output, and the `claude-usage` command name.
 
 `--json` and `--format` set the same argparse destination; the last wins.

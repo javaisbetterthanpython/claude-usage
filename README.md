@@ -19,9 +19,12 @@
 ---
 
 Claude Code shows your subscription limits only in the interactive `/usage`
-screen. **`claude-usage` gives you the weekly usage and model limits from the shell** — for
+screen. **`claude-usage` gives you subscription usage and model limits from the shell** — for
 scripts, hooks, and AI agents deciding when to back off. It uses the Claude Code
 login already on your machine. No API key to manage, nothing to configure.
+
+The 5-hour window appears when your plan has one and the usage source reports
+it. Verified Ultra (formerly Max 20x) accounts have weekly limits only.
 
 **Install `claude-usage-limits` from PyPI; the command is `claude-usage`.**
 
@@ -32,8 +35,8 @@ $ claude-usage
 
 ## ✨ Features
 
-- **Weekly limits, one command** — 7-day usage, populated weekly variants, and local reset times.
-- **🚦 Thresholds for scripts** — `--warn [N]` checks all weekly limits; `--warn-7d [N]` checks overall weekly usage. Both exit 1 at or above N%.
+- **Usage windows** — 5-hour usage when available, 7-day usage, populated weekly variants, and local reset times.
+- **🚦 Thresholds for scripts** — `--warn [N]` checks the 5-hour window when available and all weekly limits. `--warn-7d [N]` checks overall weekly usage. Both exit 1 at or above N%.
 - **📊 Extra detail** — `--all` shows per-model limits, the active window, and the weekly surface split.
 - **📟 Status line** — a compact model and usage line that also feeds the documented fallback source.
 - **🧾 Plain, JSON, or short** — readable in a terminal and easy to use from scripts.
@@ -55,14 +58,14 @@ its access token fresh.
 
 | Command | What it does |
 |---|---|
-| `claude-usage` | Weekly usage windows and their reset times |
-| `claude-usage --json` | Usage JSON from whichever source answered, with retired session limits removed; alias for `--format json` |
-| `claude-usage --warn [N]` | Exit 1 when any weekly window or weekly model limit reaches N% (default 70) |
+| `claude-usage` | Available usage windows and their reset times |
+| `claude-usage --json` | Raw usage JSON from whichever source answered (alias for `--format json`) |
+| `claude-usage --warn [N]` | Exit 1 when the 5-hour window or any weekly limit reaches N% (default 70) |
 | `claude-usage --warn-7d [N]` | Exit 1 at or above N% of the 7-day window (default 70) |
 | `claude-usage --all` | Add per-limit details and weekly surface breakdown in plain format |
 | `claude-usage --format {plain,json,short}` | Choose output format (default plain) |
 | `claude-usage --statusline` | Read Claude Code status-line JSON on stdin, cache it, print one compact line (hidden from help) |
-| `claude-usage -v`, `--verbose` | Print only credential and usage source notes to stderr |
+| `claude-usage -v`, `--verbose` | Print credential and usage sources and the plan, when available, to stderr |
 | `claude-usage -V`, `--version` | Print the version |
 | `claude-usage -h`, `--help` | Show help |
 
@@ -97,12 +100,10 @@ claude-usage --json
 The usual output is always printed. Exit codes: **0** for success, **1** when
 either threshold trips or no source answers, **2** for an argument error.
 The threshold is inclusive: `--warn` exits 1 at 70%, including exactly 70%.
-Missing or null windows do not trigger warnings. `--warn` includes weekly model
-caps in `limits[]`; `--warn-7d` checks only `seven_day`. Populated `seven_day_*`
+Missing or null windows do not trigger warnings. `--warn` includes session and
+weekly entries in `limits[]`. `--warn-7d` checks only `seven_day`. Populated `seven_day_*`
 usage windows appear in plain and short output and are checked by `--warn`.
-JSON retains other fields from the source, but removes retired session limits
-from both endpoint and status-line payloads, including older cached answers.
-Weekly share indices are adjusted when obsolete detail entries are removed.
+JSON preserves the source payload, including null fields and weekly share indices.
 
 ## 📟 Claude Code status line
 
@@ -118,7 +119,7 @@ settings):
 Claude Code pipes its documented status JSON to the command on each repaint:
 
 ```text
-Fable 5.1 · 7d 59%
+Fable 5.1 · 5h 25% · 7d 59%
 ```
 
 Missing parts are omitted. This mode never looks up credentials or makes a network

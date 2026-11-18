@@ -6,19 +6,20 @@ import sys
 
 from . import __version__
 from .api import usage, write_cache
-from .auth import config_dir
+from .auth import config_dir, resolve_plan
 from .report import render_limits, render_plain, render_short, shape, warning_reached
 
 
 def build_parser():
     p = argparse.ArgumentParser(
         prog='claude-usage',
-        description="Show Claude subscription rate limits: weekly usage and model limits.",
+        description="Show Claude subscription rate limits, including the 5-hour window when available.",
     )
     p.add_argument('--json', action='store_const', dest='format', const='json',
-                   help='print usage JSON without retired session limits (alias for --format json)')
+                   help='print the raw usage JSON (alias for --format json)')
     p.add_argument('--warn', type=int, nargs='?', const=70, metavar='N',
-                   help='exit 1 when any weekly limit is at or above N%% (default 70)')
+                   help='check the 5-hour window (when your plan has one) and weekly limits, '
+                        'exiting 1 at or above N%% (default 70)')
     p.add_argument('--warn-7d', type=int, nargs='?', const=70, metavar='N',
                    help='exit 1 when the 7-day window is at or above N%% (default 70)')
     p.add_argument('--all', action='store_true',
@@ -27,7 +28,7 @@ def build_parser():
                    help='output format (default: plain)')
     p.add_argument('--statusline', action='store_true', help=argparse.SUPPRESS)
     p.add_argument('-v', '--verbose', action='store_true',
-                   help='log credential and usage sources to stderr')
+                   help='log credential and usage sources and the plan to stderr')
     p.add_argument('-V', '--version', action='version', version='claude-usage %s' % __version__)
     return p
 
@@ -51,6 +52,10 @@ def main(argv=None):
         return statusline()
     try:
         out = usage(verbose=args.verbose)
+        if args.verbose:
+            plan = resolve_plan()
+            if plan is not None:
+                print('plan: ' + plan, file=sys.stderr)
         if args.format == 'json':
             json.dump(out['raw'], sys.stdout, indent=1)
             print()

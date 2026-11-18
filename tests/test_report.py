@@ -6,8 +6,9 @@ import pytest
 
 from claude_usage import cli, report
 
-# Representative weekly payload based on the live response; values are illustrative.
+# Representative payload without a 5-hour window; values are illustrative.
 ENDPOINT = {
+    "five_hour": None,
     "seven_day": {"utilization": 59.0, "resets_at": "2026-10-25T07:00:00.886762+00:00",
                   "limit_dollars": None, "used_dollars": None, "remaining_dollars": None, "locked_reason": None},
     "seven_day_oauth_apps": None, "seven_day_opus": None, "seven_day_sonnet": None,
@@ -34,7 +35,15 @@ ENDPOINT = {
     ]},
     "weekly_scoped_shares": [{"limit_index": 1, "used_percent_of_weekly": 3, "allowance_percent_of_weekly": 50}],
 }
+FIVE_HOUR = {"utilization": 23.0, "resets_at": "2026-10-24T20:10:00.886739+00:00"}
+WITH_SESSION = dict(
+    ENDPOINT, five_hour=FIVE_HOUR,
+    limits=[{"kind": "session", "group": "session", "percent": 23, "severity": "normal",
+             "resets_at": FIVE_HOUR["resets_at"], "scope": None, "is_active": False}] + ENDPOINT["limits"],
+    weekly_scoped_shares=[dict(ENDPOINT["weekly_scoped_shares"][0], limit_index=2)],
+)
 STATUS = {"model": {"display_name": "Fable 5.1"}, "rate_limits": {
+    "five_hour": {"used_percentage": 25, "resets_at": 1792000000},
     "seven_day": {"used_percentage": 59, "resets_at": 1792100000},
 }}
 
@@ -49,11 +58,13 @@ def test_shape_endpoint():
     out = report.shape(ENDPOINT, "endpoint")
     assert out == {"seven_day": {"utilization": 59.0, "resets_at": ENDPOINT['seven_day']['resets_at']},
                    "source": "endpoint", "raw": ENDPOINT}
+    assert report.shape(WITH_SESSION, "endpoint")["five_hour"] == FIVE_HOUR
     assert report.shape({}, "endpoint")['seven_day'] == {"utilization": None, "resets_at": None}
 
 
 def test_shape_status_line():
     out = report.shape(STATUS, "status line, 12 min ago")
+    assert out['five_hour'] == {"utilization": 25.0, "resets_at": datetime.fromtimestamp(1792000000, timezone.utc).isoformat()}
     assert out['seven_day'] == {"utilization": 59.0, "resets_at": datetime.fromtimestamp(1792100000, timezone.utc).isoformat()}
     assert out['seven_day']['utilization'] == 59.0
     assert out['raw'] == STATUS
@@ -81,10 +92,14 @@ def test_pct(value, expected):
     assert report.pct({}) == "?"
 
 
-def test_plain_exact_layout(monkeypatch):
+@pytest.mark.parametrize("raw,first_line", [
+    (ENDPOINT, ""),
+    (WITH_SESSION, "5-hour: 23% used, reset time unknown\n"),
+])
+def test_plain_exact_layout(monkeypatch, raw, first_line):
     monkeypatch.setattr(report, "when", lambda iso: "reset time unknown")
-    out = report.render_plain(report.shape(ENDPOINT, "endpoint, 3 min ago"))
-    assert out == ("7-day: 59% used, reset time unknown\n"
+    out = report.render_plain(report.shape(raw, "endpoint, 3 min ago"))
+    assert out == (first_line + "7-day: 59% used, reset time unknown\n"
                    "(from the endpoint, 3 min ago)")
 
 
@@ -104,7 +119,10 @@ def test_all_details(monkeypatch):
 
 @pytest.mark.parametrize("raw,source,expected", [
     (ENDPOINT, "endpoint", "7d 59%"),
-    (STATUS, "status line, 0 min ago", "Fable 5.1 · 7d 59%"),
+    (WITH_SESSION, "endpoint", "5h 23% · 7d 59%"),
+    (STATUS, "status line, 0 min ago", "Fable 5.1 · 5h 25% · 7d 59%"),
+    ({"rate_limits": {"five_hour": None, "seven_day": {"used_percentage": 59}}},
+     "status line, 0 min ago", "7d 59%"),
     ({"model": {"display_name": "Fable"}}, "status line, 0 min ago", "Fable"),
     ({"rate_limits": {"seven_day": {"used_percentage": 0}}}, "status line, 0 min ago", "7d 0%"),
     ({}, "endpoint", ""),
@@ -114,7 +132,9 @@ def test_short(raw, source, expected):
 
 
 @pytest.mark.parametrize("value,code", [(69, 0), (70, 1), (71, 1), (None, 0)])
-@pytest.mark.parametrize("flag,key", [("--warn", "seven_day"), ("--warn-7d", "seven_day")])
+@pytest.mark.parametrize("flag,key", [
+    ("--warn", "five_hour"), ("--warn", "seven_day"), ("--warn-7d", "seven_day"),
+])
 def test_warn_default(monkeypatch, capsys, value, code, flag, key):
     raw = {key: {"utilization": value}}
     monkeypatch.setattr(cli, "usage", lambda **kwargs: report.shape(raw, "endpoint"))
@@ -131,15 +151,23 @@ def test_thresholds_combine_and_json(monkeypatch, capsys):
 
 
 @pytest.mark.parametrize("args", [["--json"], ["--format", "json"], ["--all", "--json"]])
-def test_json_raw_roundtrip(args, capsys):
+@pytest.mark.parametrize("raw", [ENDPOINT, WITH_SESSION])
+def test_json_raw_roundtrip(args, raw, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "usage", lambda **kwargs: report.shape(raw, "endpoint"))
     assert cli.main(args) == 0
-    assert capsys.readouterr().out == json.dumps(ENDPOINT, indent=1) + '\n'
+    assert capsys.readouterr().out == json.dumps(raw, indent=1) + '\n'
 
 
-def test_cli_all(capsys):
+@pytest.mark.parametrize("raw,has_session", [(ENDPOINT, False), (WITH_SESSION, True)])
+def test_cli_all(raw, has_session, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "usage", lambda **kwargs: report.shape(raw, "endpoint"))
     assert cli.main(["--all"]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("7-day: 59% used,")
+    assert out.startswith("5-hour: 23% used," if has_session else "7-day: 59% used,")
+    session_rows = [line for line in out.splitlines() if line.startswith("session ")]
+    assert len(session_rows) == int(has_session)
+    if has_session:
+        assert session_rows[0].split()[:3] == ["session", "23%", "normal"]
     assert "weekly_scoped" in out and "Claude Code 96%" in out
 
 
@@ -156,7 +184,7 @@ def test_statusline_cache_and_line(monkeypatch, capsys, tmp_path):
     monkeypatch.setattr(cli.sys, "stdin", io.StringIO(json.dumps(STATUS)))
     monkeypatch.setattr(cli, "usage", lambda **k: pytest.fail("looked up usage"))
     assert cli.main(["--statusline"]) == 0
-    assert capsys.readouterr().out == "Fable 5.1 · 7d 59%\n"
+    assert capsys.readouterr().out == "Fable 5.1 · 5h 25% · 7d 59%\n"
     assert json.loads((tmp_path / 'last-statusline.json').read_text()) == STATUS
     assert not (tmp_path / 'last-statusline.json.tmp').exists()
 
@@ -182,7 +210,7 @@ def test_version(capsys):
     with pytest.raises(SystemExit) as exc:
         cli.main(["--version"])
     assert exc.value.code == 0
-    assert capsys.readouterr().out == "claude-usage 0.2.0\n"
+    assert capsys.readouterr().out == "claude-usage 0.2.1\n"
 
 
 def test_help_hides_statusline(capsys):
@@ -201,32 +229,13 @@ def test_argparse_error(capsys):
     assert exc.value.code == 2
 
 
-@pytest.mark.parametrize('legacy', [None, {'utilization': 99, 'resets_at': 'bad date'}])
-@pytest.mark.parametrize('source', ['endpoint', 'status line, 0 min ago'])
-def test_retired_window_ignored_and_removed_from_json(monkeypatch, capsys, legacy, source):
-    windows = {'five_hour': legacy, 'seven_day': None}
-    raw = {'rate_limits': windows} if source.startswith('status line') else windows
-    shaped = report.shape(raw, source)
-    assert 'five_hour' not in shaped
-    assert 'five_hour' not in json.dumps(shaped['raw'])
-    assert raw.get('rate_limits', raw)['five_hour'] == legacy  # Never mutate the cache/feed.
-    assert report.render_short(shaped) == ''
-    assert report.render_plain(shaped).startswith('7-day: ? used, reset time unknown')
-    monkeypatch.setattr(cli, 'usage', lambda **kwargs: shaped)
-    assert cli.main(['--json', '--warn']) == 0
-    assert 'five_hour' not in capsys.readouterr().out
-
-
-def test_legacy_session_details_and_share_indices(monkeypatch, capsys):
-    raw = dict(ENDPOINT, five_hour={'utilization': 99})
-    raw['limits'] = [{'kind': 'session', 'group': 'session', 'percent': 99}] + ENDPOINT['limits']
-    raw['weekly_scoped_shares'] = [dict(ENDPOINT['weekly_scoped_shares'][0], limit_index=2)]
-    shaped = report.shape(raw, 'endpoint')
-    assert shaped['raw'] == ENDPOINT
-    assert raw['weekly_scoped_shares'][0]['limit_index'] == 2
-    monkeypatch.setattr(cli, 'usage', lambda **kwargs: shaped)
-    assert cli.main(['--all', '--warn']) == 0
-    assert 'session' not in capsys.readouterr().out
+@pytest.mark.parametrize('field', ['kind', 'group'])
+def test_session_limit_warning(monkeypatch, field):
+    raw = dict(ENDPOINT, limits=[{field: 'session', 'percent': 70}])
+    monkeypatch.setattr(cli, 'usage', lambda **kwargs: report.shape(raw, 'endpoint'))
+    assert cli.main(['--warn']) == 1
+    assert cli.main(['--warn', '71']) == 0
+    assert cli.main(['--warn-7d']) == 0
 
 
 @pytest.mark.parametrize('source', ['endpoint', 'status line, 0 min ago'])
